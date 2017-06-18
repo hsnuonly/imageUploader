@@ -21,8 +21,7 @@ namespace albumServer
         MD5 md5;
         SQLiteConnection sql_conn;
         SQLiteCommand sql_cmd;
-        FileStream readIndexfs;
-        StreamWriter readIndexSW;
+        string userSiteTemplate;
         public Program()
         {
             md5 = MD5.Create();
@@ -34,8 +33,21 @@ namespace albumServer
             sql_conn.Open();
             sql_cmd = sql_conn.CreateCommand();
 
-            sql_cmd.CommandText = @"CREATE TABLE IF NOT EXISTS md5 (num INTEGER PRIMARY KEY AUTOINCREMENT, hash TEXT, file TEXT, user TEXT)";
+            sql_cmd.CommandText = @"CREATE TABLE IF NOT EXISTS md5 (num INTEGER PRIMARY KEY AUTOINCREMENT, hash TEXT, file TEXT, user TEXT, time TEXT)";
             sql_cmd.ExecuteNonQuery();
+
+            try
+            {
+                FileStream htmlfs = new FileStream("user.html", FileMode.Open);
+                StreamReader htmlsr = new StreamReader(htmlfs);
+                userSiteTemplate = htmlsr.ReadToEnd();
+                htmlsr.Close();
+                htmlfs.Close();
+            }
+            catch
+            {
+
+            }
 
             if (!Directory.Exists("images"))
             {
@@ -45,25 +57,31 @@ namespace albumServer
             {
                 try
                 {
-                    readIndexfs = new FileStream("imageIndex", FileMode.OpenOrCreate);
+                    FileStream readIndexfs = new FileStream("imageIndex", FileMode.Open);
                     readIndexfs.Seek(0, SeekOrigin.Begin);
                     StreamReader sr = new StreamReader(readIndexfs);
-                    readIndexSW = new StreamWriter(readIndexfs);
                     nextIndex = Int64.Parse(sr.ReadLine());
                     sr.Close();
+                    readIndexfs.Close();
                 }
                 catch
                 {
-                    readIndexSW = new StreamWriter(readIndexfs);
-                    readIndexSW.WriteLine(0);
+                    FileStream readIndexfs = new FileStream("imageIndex", FileMode.Create);
+                    readIndexfs.Seek(0, SeekOrigin.Begin);
+                    StreamWriter sw = new StreamWriter(readIndexfs);
+                    sw.WriteLine(0);
+                    sw.Close();
+                    readIndexfs.Close();
                 }
             }
             else
             {
-                readIndexfs = new FileStream("imageIndex", FileMode.OpenOrCreate);
+                FileStream readIndexfs = new FileStream("imageIndex", FileMode.Create);
                 readIndexfs.Seek(0, SeekOrigin.Begin);
-                readIndexSW = new StreamWriter(readIndexfs);
-                nextIndex = 0;
+                StreamWriter sw = new StreamWriter(readIndexfs);
+                sw.WriteLine(0);
+                sw.Close();
+                readIndexfs.Close();
             }
             listener = new TcpListener(System.Net.IPAddress.Any, 8888);
             listener.Start();
@@ -96,7 +114,11 @@ namespace albumServer
 
                 string buf = reader.ReadLine();
                 Console.WriteLine(buf);
-                string path =  buf.Split(' ')[1].Remove(0,1);
+                string[] path =  buf.Split(' ')[1].Split('/');
+                foreach(string s in path)
+                {
+                    Console.WriteLine(s);
+                }
                 while (true)
                 {
                     buf = reader.ReadLine();
@@ -104,20 +126,22 @@ namespace albumServer
                     Console.WriteLine(buf);
                 }
                 Console.WriteLine("===========");
-                if (path.Contains(@"u/"))
+                if (path[1]=="u")
                 {
-                    string id = path.Remove(0, 2);
+                    string id = path[2];
                     string res = "";
-                    Console.WriteLine(path);
-                    Console.WriteLine(id);
+                    string content = "";
                     sql_cmd.CommandText = "SELECT * FROM md5 WHERE user = '" + id + "'";
                     SQLiteDataReader sqlite_datareader = sql_cmd.ExecuteReader();
                     while (sqlite_datareader.Read())
                     {
-                        res += sqlite_datareader["file"].ToString()+"\r\n";
-                        Console.WriteLine(sqlite_datareader["num"].ToString());
+                        content +=String.Format(@"<div class='col-md-4'><img class='img-responsive' src='../{0}'></img><p>{1}</p></div>",
+                            sqlite_datareader["file"].ToString(),
+                            sqlite_datareader["time"].ToString()
+                            );
                     }
                     sqlite_datareader.Close();
+                    res = string.Format(userSiteTemplate, id, content);
 
                     writer.WriteLine(@"HTTP/1.1 200 OK
                     Date: {0}
@@ -132,8 +156,8 @@ namespace albumServer
                 }
                 else
                 {
-                    if (!File.Exists(@"images\" + path)) path = "notfound.jpg";
-                    FileStream fs = new FileStream(@"images\" + path, FileMode.Open);
+                    if (!File.Exists(@"images\" + path[1])) path[1] = "notfound.jpg";
+                    FileStream fs = new FileStream(@"images\" + path[1], FileMode.Open);
                     byte[] res = new byte[fs.Length];
                     fs.Read(res, 0, res.Length);
                     fs.Close();
@@ -163,17 +187,17 @@ namespace albumServer
                 string id = reader.ReadLine();
                 int size = Int32.Parse(reader.ReadLine());
                 byte[] buf = new byte[size];
-                
+
                 stream.Read(buf, 0, size);
 
                 byte[] md5key = md5.ComputeHash(buf, 0, buf.Length);
                 string md5str = "";
-                foreach(byte b in md5key)
+                foreach (byte b in md5key)
                 {
                     md5str += b.ToString("x2");
                 }
 
-                sql_cmd.CommandText = "SELECT * FROM md5 WHERE hash = '"+md5str+"'"; 
+                sql_cmd.CommandText = "SELECT * FROM md5 WHERE hash = '" + md5str + "'";
                 SQLiteDataReader sqlite_datareader = sql_cmd.ExecuteReader();
                 string index = null;
                 while (sqlite_datareader.Read())
@@ -195,14 +219,18 @@ namespace albumServer
                     fs.Close();
                     writer.WriteLine(path + ".jpg");
 
-                    sql_cmd.CommandText = "INSERT INTO md5 (hash,file,user) VALUES ('" + md5str + "','" + path + ".jpg','"+id+"');";
+                    sql_cmd.CommandText = "INSERT INTO md5 (hash,file,user,time) VALUES ('" + md5str + "','" + path + ".jpg','" + id + "','" + DateTime.Now.ToString() + "');";
                     sql_cmd.ExecuteNonQuery();
 
                     nextIndex++;
+                    FileStream readIndexfs = new FileStream("imageIndex", FileMode.Create);
                     readIndexfs.Seek(0, SeekOrigin.Begin);
-                    readIndexSW.WriteLine(nextIndex);
+                    StreamWriter sw = new StreamWriter(readIndexfs);
+                    sw.WriteLine(nextIndex);
+                    sw.Close();
+                    readIndexfs.Close();
                 }
-                
+
                 writer.Flush();
                 stream.Close();
                 reader.Close();
