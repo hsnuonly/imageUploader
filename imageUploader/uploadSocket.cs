@@ -14,14 +14,14 @@ namespace imageUploader
         StreamWriter writer;
         StreamReader reader;
         Form1 form;
-        public uploadSocket(string id,byte[] buf,Form1 form)
+        public uploadSocket(string ip,string id,byte[] buf,Form1 form)
         {
             this.form = form;
 
             try
             {
                 uploader = new TcpClient();
-                uploader.Connect("localhost", 8888);
+                uploader.Connect(ip, 8888);
                 NetworkStream stream = uploader.GetStream();
                 writer = new StreamWriter(stream);
                 reader = new StreamReader(stream);

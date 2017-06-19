@@ -64,7 +64,7 @@ namespace imageUploader
             encoder.Save(ms);
             //byte[] buf = ms.ToArray();
             //fs.Write(buf, 0, buf.Length);
-            uploadSocket uploader = new uploadSocket(idTextbox.Text,ms.ToArray(),this);
+            uploadSocket uploader = new uploadSocket(IPtextBox.Text,idTextbox.Text,ms.ToArray(),this);
         }
         public void showMessage(string text)
         {
