@@ -95,7 +95,7 @@ namespace albumServer
             }
         }
         private void httpListen() {
-            httpServer = new TcpListener(System.Net.IPAddress.Any,80);
+            httpServer = new TcpListener(System.Net.IPAddress.Any,8763);
             httpServer.Start();
             while (true)
             {
@@ -143,7 +143,7 @@ namespace albumServer
                     sqlite_datareader.Close();
                     res = string.Format(userSiteTemplate, id, content);
 
-                    writer.WriteLine(@"HTTP/1.1 200 OK
+                    writer.WriteLine(@"HTTP/1.X 200 OK
                     Date: {0}
                     Last-Modified: {0}
                     Content-Length: {1}
@@ -161,6 +161,8 @@ namespace albumServer
                     byte[] res = new byte[fs.Length];
                     fs.Read(res, 0, res.Length);
                     fs.Close();
+                    writer.WriteLine("HTTP/1.X 200 OK\r\n");
+                    writer.Flush();
                     stream.Write(res, 0, res.Length);
                     stream.Flush();
                 }
